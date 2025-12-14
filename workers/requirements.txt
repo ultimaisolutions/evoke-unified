@@ -1,0 +1,21 @@
+# Redis Queue for job processing
+rq==1.16.0
+redis==5.0.1
+
+# Database
+psycopg2-binary==2.9.9
+
+# Computer Vision
+opencv-python-headless==4.8.1.78
+numpy==1.26.2
+Pillow==10.1.0
+
+# Machine Learning - YOLOv5
+torch>=2.0.0
+ultralytics>=8.0.200
+
+# Hume AI for emotion analysis
+hume>=0.7.0
+
+# Environment and utilities
+python-dotenv==1.0.0

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+*.local
+
+# Build outputs
+dist/
+build/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (keep structure, ignore contents)
+uploads/ads/*
+uploads/reactions/*
+uploads/exports/*
+!uploads/ads/.gitkeep
+!uploads/reactions/.gitkeep
+!uploads/exports/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# ML Models (downloaded at runtime)
+*.pt
+*.pth
+yolov5/
+
+# Misc
+.cache/
+*.tmp
