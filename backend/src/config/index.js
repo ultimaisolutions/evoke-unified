@@ -14,11 +14,11 @@ module.exports = {
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 
   // File uploads
-  uploadDir: path.resolve(__dirname, '../../..', process.env.UPLOAD_DIR || '../uploads'),
+  uploadDir: path.resolve(__dirname, '../../uploads'),
   maxFileSizeMB: parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 500,
 
   // Paths
-  adsDir: path.resolve(__dirname, '../../..', process.env.UPLOAD_DIR || '../uploads', 'ads'),
-  reactionsDir: path.resolve(__dirname, '../../..', process.env.UPLOAD_DIR || '../uploads', 'reactions'),
-  exportsDir: path.resolve(__dirname, '../../..', process.env.UPLOAD_DIR || '../uploads', 'exports'),
+  adsDir: path.resolve(__dirname, '../../uploads/ads'),
+  reactionsDir: path.resolve(__dirname, '../../uploads/reactions'),
+  exportsDir: path.resolve(__dirname, '../../uploads/exports'),
 };

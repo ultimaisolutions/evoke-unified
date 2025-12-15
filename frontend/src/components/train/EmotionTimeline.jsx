@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { reactionsApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
-import { TrendingUp, Smile, Zap, Heart, Loader2 } from 'lucide-react';
+import { TrendingUp, Smile, Zap, Heart, Loader2, Radio } from 'lucide-react';
 
 const EMOTION_COLORS = {
   joy: '#22c55e',
@@ -51,18 +51,59 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export function EmotionTimeline({ reactionId, emotionSummary }) {
+export function EmotionTimeline({ reactionId, emotionSummary, liveFrameResults = [] }) {
   const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeEmotions, setActiveEmotions] = useState(['interest', 'engagement']);
 
+  // Check if we're in live streaming mode
+  const isLiveMode = liveFrameResults.length > 0;
+
+  // Transform live frame results into timeline format
+  const liveTimeline = useMemo(() => {
+    if (!liveFrameResults.length) return [];
+
+    return liveFrameResults
+      .filter(frame => frame.face_detected)
+      .map(frame => ({
+        t: Math.round(frame.timestamp || 0),
+        joy: frame.joy || 0,
+        interest: frame.interest || 0,
+        surprise: frame.surprise || 0,
+        engagement: frame.engagement_level || 0,
+      }));
+  }, [liveFrameResults]);
+
+  // Calculate live summary from frame results
+  const liveSummary = useMemo(() => {
+    if (!liveFrameResults.length) return null;
+
+    const framesWithFaces = liveFrameResults.filter(f => f.face_detected);
+    if (!framesWithFaces.length) return null;
+
+    const avg = (key) => {
+      const sum = framesWithFaces.reduce((acc, f) => acc + (f[key] || 0), 0);
+      return sum / framesWithFaces.length;
+    };
+
+    return {
+      avg_joy: avg('joy'),
+      avg_interest: avg('interest'),
+      avg_engagement: avg('engagement_level'),
+      emotional_valence: avg('joy') - avg('sadness'),
+      dominant_emotion: framesWithFaces[framesWithFaces.length - 1]?.dominant_emotion || 'N/A',
+      frames_analyzed: liveFrameResults.length,
+      frames_with_faces: framesWithFaces.length,
+    };
+  }, [liveFrameResults]);
+
   useEffect(() => {
-    if (reactionId) {
+    if (reactionId && !isLiveMode) {
       loadTimeline();
     } else if (emotionSummary?.emotion_timeline) {
       setTimeline(emotionSummary.emotion_timeline);
     }
-  }, [reactionId, emotionSummary]);
+  }, [reactionId, emotionSummary, isLiveMode]);
 
   const loadTimeline = async () => {
     try {
@@ -103,10 +144,22 @@ export function EmotionTimeline({ reactionId, emotionSummary }) {
     );
   }
 
-  const summary = emotionSummary || {};
+  // Use live data when streaming, otherwise use props/fetched data
+  const summary = isLiveMode ? (liveSummary || {}) : (emotionSummary || {});
+  const chartData = isLiveMode ? liveTimeline : timeline;
 
   return (
     <div className="space-y-6">
+      {/* Live streaming indicator */}
+      {isLiveMode && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30">
+          <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
+          <span className="text-sm text-purple-300">
+            Live streaming: {liveFrameResults.length} frames analyzed
+          </span>
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -167,9 +220,9 @@ export function EmotionTimeline({ reactionId, emotionSummary }) {
         </div>
 
         <div className="h-[300px]">
-          {timeline.length > 0 ? (
+          {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timeline}>
+              <AreaChart data={chartData}>
                 <defs>
                   {EMOTION_CONFIG.map(({ key, color }) => (
                     <linearGradient key={key} id={`gradient-${key}`} x1="0" y1="0" x2="0" y2="1">

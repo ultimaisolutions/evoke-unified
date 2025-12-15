@@ -157,6 +157,10 @@ export const settingsApi = {
   test: async (service) => {
     return api.post(`/settings/test/${service}`);
   },
+
+  deleteKey: async (key) => {
+    return api.delete(`/settings/${key}`);
+  },
 };
 
 export default api;

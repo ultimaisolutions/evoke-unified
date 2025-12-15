@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Upload, Brain, Settings, Sparkles } from 'lucide-react';
+import { Upload, Brain, Settings, Sparkles, FolderOpen } from 'lucide-react';
 
 // Import pages
 import UploadPage from './pages/UploadPage';
+import AdsPage from './pages/AdsPage';
 import TrainPage from './pages/TrainPage';
 import SettingsPage from './pages/SettingsPage';
 
 const tabs = [
   { id: 'upload', label: 'Upload Ad', icon: Upload, component: UploadPage },
+  { id: 'ads', label: 'Ads', icon: FolderOpen, component: AdsPage },
   { id: 'train', label: 'Train', icon: Brain, component: TrainPage },
   { id: 'settings', label: 'Settings', icon: Settings, component: SettingsPage },
 ];

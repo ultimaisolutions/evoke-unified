@@ -66,7 +66,41 @@ const createReactionVideo = `
 `;
 
 const getReactionById = `
-  SELECT rv.*, es.*
+  SELECT
+    rv.id,
+    rv.ad_id,
+    rv.filename,
+    rv.original_filename,
+    rv.file_path,
+    rv.duration_seconds,
+    rv.fps,
+    rv.frame_count,
+    rv.status,
+    rv.error_message,
+    rv.created_at,
+    rv.updated_at,
+    es.avg_joy,
+    es.avg_surprise,
+    es.avg_sadness,
+    es.avg_anger,
+    es.avg_fear,
+    es.avg_disgust,
+    es.avg_contempt,
+    es.avg_interest,
+    es.avg_confusion,
+    es.peak_joy_timestamp,
+    es.peak_surprise_timestamp,
+    es.peak_interest_timestamp,
+    es.avg_engagement,
+    es.peak_engagement,
+    es.engagement_trend,
+    es.dominant_emotion,
+    es.emotional_valence,
+    es.emotional_arousal,
+    es.emotion_timeline,
+    es.frames_analyzed,
+    es.frames_with_faces,
+    es.processing_time_seconds as emotion_processing_time
   FROM reaction_videos rv
   LEFT JOIN emotion_summaries es ON rv.id = es.reaction_video_id
   WHERE rv.id = $1

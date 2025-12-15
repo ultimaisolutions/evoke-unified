@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { reactionsApi } from '../../lib/api';
 import { useJobProgress } from '../../hooks/useJobProgress';
 import { cn, formatFileSize } from '../../lib/utils';
 import { Video, Upload, Loader2, CheckCircle2, XCircle, Play } from 'lucide-react';
 
-export function ReactionUpload({ selectedAd, onAnalysisComplete }) {
+export function ReactionUpload({ selectedAd, onAnalysisComplete, onFrameResultsUpdate }) {
   const [file, setFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState('idle'); // idle, uploading, processing, completed, failed
@@ -13,7 +13,17 @@ export function ReactionUpload({ selectedAd, onAnalysisComplete }) {
   const [error, setError] = useState(null);
 
   const [jobId, setJobId] = useState(null);
-  const { progress, step, status: jobStatus, error: jobError } = useJobProgress(jobId);
+  const { progress, step, status: jobStatus, error: jobError, frameResults } = useJobProgress(jobId);
+
+  // Notify parent of frame results for real-time timeline updates
+  useEffect(() => {
+    if (frameResults.length > 0 && onFrameResultsUpdate) {
+      onFrameResultsUpdate(frameResults);
+    }
+  }, [frameResults, onFrameResultsUpdate]);
+
+  // Prevent duplicate completion handling
+  const completionHandledRef = useRef(false);
 
   const onDrop = useCallback((acceptedFiles) => {
     const selectedFile = acceptedFiles[0];
@@ -21,6 +31,7 @@ export function ReactionUpload({ selectedAd, onAnalysisComplete }) {
       setFile(selectedFile);
       setError(null);
       setStatus('idle');
+      completionHandledRef.current = false;
     }
   }, []);
 
@@ -39,6 +50,9 @@ export function ReactionUpload({ selectedAd, onAnalysisComplete }) {
     if (!file || !selectedAd) return;
 
     try {
+      // Reset completion flag
+      completionHandledRef.current = false;
+
       // Upload
       setStatus('uploading');
       setUploadProgress(0);
@@ -62,18 +76,28 @@ export function ReactionUpload({ selectedAd, onAnalysisComplete }) {
     }
   };
 
-  // Watch for job completion
-  if (jobStatus === 'completed' && status === 'processing' && reaction) {
-    reactionsApi.get(reaction.id).then((result) => {
-      setStatus('completed');
-      onAnalysisComplete?.(result.data);
-    }).catch(console.error);
-  }
+  // Watch for job completion - properly in useEffect
+  useEffect(() => {
+    if (jobStatus === 'completed' && status === 'processing' && reaction && !completionHandledRef.current) {
+      completionHandledRef.current = true;
 
-  if (jobStatus === 'failed' && status === 'processing') {
-    setStatus('failed');
-    setError(jobError);
-  }
+      reactionsApi.get(reaction.id)
+        .then((result) => {
+          setStatus('completed');
+          onAnalysisComplete?.(result.data);
+        })
+        .catch((err) => {
+          setStatus('failed');
+          setError(err.message || 'Failed to retrieve analysis results');
+        });
+    }
+
+    if (jobStatus === 'failed' && status === 'processing' && !completionHandledRef.current) {
+      completionHandledRef.current = true;
+      setStatus('failed');
+      setError(jobError || 'Analysis failed');
+    }
+  }, [jobStatus, status, reaction, jobError, onAnalysisComplete]);
 
   const isDisabled = !selectedAd;
   const isProcessing = status === 'uploading' || status === 'processing';

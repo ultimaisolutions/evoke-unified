@@ -46,3 +46,5 @@ yolov5/
 # Misc
 .cache/
 *.tmp
+# Local Claude settings
+.claude/

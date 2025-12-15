@@ -3,7 +3,7 @@ import { settingsApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import {
   Settings2, Save, Loader2, CheckCircle2, Video, Image,
-  Gauge, Palette, RefreshCw
+  Gauge, Palette, RefreshCw, FlaskConical, AlertTriangle, Radio
 } from 'lucide-react';
 
 const DETECTION_MODELS = [
@@ -87,6 +87,8 @@ export function GeneralSettings() {
     enable_motion: true,
     max_video_duration: 60,
     confidence_threshold: 0.5,
+    use_mock_emotions: false,
+    use_streaming_api: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -102,13 +104,15 @@ export function GeneralSettings() {
       const result = await settingsApi.get();
       setSettings(prev => ({
         ...prev,
-        detection_model: result.data.detection_model || 'yolov5s',
-        frame_rate: result.data.frame_rate || 2,
-        enable_colors: result.data.enable_colors !== false,
-        enable_composition: result.data.enable_composition !== false,
-        enable_motion: result.data.enable_motion !== false,
-        max_video_duration: result.data.max_video_duration || 60,
-        confidence_threshold: result.data.confidence_threshold || 0.5,
+        detection_model: result.data.detection_model?.value || 'yolov5s',
+        frame_rate: result.data.frame_rate?.value || 2,
+        enable_colors: result.data.enable_colors?.value !== 'false',
+        enable_composition: result.data.enable_composition?.value !== 'false',
+        enable_motion: result.data.enable_motion?.value !== 'false',
+        max_video_duration: result.data.max_video_duration?.value || 60,
+        confidence_threshold: parseFloat(result.data.confidence_threshold?.value) || 0.5,
+        use_mock_emotions: result.data.use_mock_emotions?.value === 'true',
+        use_streaming_api: result.data.use_streaming_api?.value !== 'false',
       }));
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -245,6 +249,77 @@ export function GeneralSettings() {
             </span>
           </div>
         </SettingRow>
+      </div>
+
+      {/* Developer/Testing Section */}
+      <div className="mt-6 pt-4 border-t border-amber-500/20">
+        <div className="flex items-center gap-2 mb-4">
+          <FlaskConical className="w-4 h-4 text-amber-400" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">
+            Developer Options
+          </span>
+        </div>
+
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center mt-0.5">
+                <FlaskConical className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground text-sm">Mock Emotion Analysis</p>
+                <p className="text-xs text-muted-foreground">
+                  Use simulated data instead of real Hume AI API
+                </p>
+                {settings.use_mock_emotions && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-amber-400">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>API calls disabled - using generated test data</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0">
+              <Toggle
+                checked={settings.use_mock_emotions}
+                onChange={(v) => handleChange('use_mock_emotions', v)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4 mt-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center mt-0.5">
+                <Radio className="w-4 h-4 text-purple-400" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground text-sm">Streaming API Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Real-time frame-by-frame analysis via WebSocket
+                </p>
+                {settings.use_streaming_api && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-purple-400">
+                    <Radio className="w-3 h-3" />
+                    <span>Live streaming enabled - see emotions in real-time</span>
+                  </div>
+                )}
+                {!settings.use_streaming_api && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                    <span>Batch mode - upload entire video, wait for results</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0">
+              <Toggle
+                checked={settings.use_streaming_api}
+                onChange={(v) => handleChange('use_streaming_api', v)}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Save button */}

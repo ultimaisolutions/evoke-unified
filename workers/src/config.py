@@ -16,6 +16,7 @@ REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 
 # Hume AI
 HUME_API_KEY = os.getenv('HUME_API_KEY', '')
+USE_MOCK_EMOTIONS = os.getenv('USE_MOCK_EMOTIONS', 'false').lower() == 'true'
 
 # Worker Configuration
 WORKER_PROCESSES = int(os.getenv('WORKER_PROCESSES', '4'))

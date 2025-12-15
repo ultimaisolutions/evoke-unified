@@ -13,9 +13,19 @@ Pillow==10.1.0
 # Machine Learning - YOLOv5
 torch>=2.0.0
 ultralytics>=8.0.200
+pandas>=2.0.0
+tqdm>=4.64.0
+seaborn>=0.12.0
+PyYAML>=6.0
 
 # Hume AI for emotion analysis
 hume>=0.7.0
+
+# WebSocket for Hume streaming API
+websockets>=12.0
+
+# HTTP client for API calls
+requests>=2.31.0
 
 # Environment and utilities
 python-dotenv==1.0.0

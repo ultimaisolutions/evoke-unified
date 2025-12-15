@@ -11,18 +11,21 @@ export function useJobProgress(jobId) {
   const [status, setStatus] = useState('idle'); // idle, processing, completed, failed
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [frameResults, setFrameResults] = useState([]);
 
   useEffect(() => {
     if (!jobId) {
       setStatus('idle');
       setProgress(0);
       setStep('');
+      setFrameResults([]);
       return;
     }
 
     setStatus('processing');
     setProgress(0);
     setStep('Starting...');
+    setFrameResults([]);
 
     const unsubscribe = subscribeToJob(jobId, {
       onProgress: (data) => {
@@ -40,6 +43,12 @@ export function useJobProgress(jobId) {
         setError(data.error || 'Unknown error');
         setStep('Failed');
       },
+      onFrame: (data) => {
+        // Real-time frame result from streaming analysis
+        if (data.frame) {
+          setFrameResults(prev => [...prev, data.frame]);
+        }
+      },
     });
 
     return () => {
@@ -53,6 +62,7 @@ export function useJobProgress(jobId) {
     setStatus('idle');
     setError(null);
     setResult(null);
+    setFrameResults([]);
   }, []);
 
   return {
@@ -61,6 +71,7 @@ export function useJobProgress(jobId) {
     status,
     error,
     result,
+    frameResults,
     isProcessing: status === 'processing',
     isCompleted: status === 'completed',
     isFailed: status === 'failed',

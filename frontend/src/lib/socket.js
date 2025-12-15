@@ -74,9 +74,16 @@ export function subscribeToJob(jobId, handlers = {}) {
     }
   };
 
+  const frameHandler = (data) => {
+    if (data.jobId === jobId && handlers.onFrame) {
+      handlers.onFrame(data);
+    }
+  };
+
   socket.on('job:progress', progressHandler);
   socket.on('job:completed', completedHandler);
   socket.on('job:error', errorHandler);
+  socket.on('job:frame', frameHandler);
 
   // Return unsubscribe function
   return () => {
@@ -84,6 +91,7 @@ export function subscribeToJob(jobId, handlers = {}) {
     socket.off('job:progress', progressHandler);
     socket.off('job:completed', completedHandler);
     socket.off('job:error', errorHandler);
+    socket.off('job:frame', frameHandler);
   };
 }
 

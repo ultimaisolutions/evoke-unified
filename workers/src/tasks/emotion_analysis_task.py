@@ -1,19 +1,25 @@
 """
 Emotion Analysis Task
 Analyzes reaction videos for viewer emotional responses using Hume AI
+Supports both streaming (real-time) and batch API modes
 """
 import json
 import time
 import logging
 import traceback
-from typing import Dict, Any
+import asyncio
+import cv2
+from typing import Dict, Any, Optional
 
-from ..config import get_redis_connection, FRAME_SAMPLE_RATE, HUME_API_KEY
+from ..config import get_redis_connection, FRAME_SAMPLE_RATE, HUME_API_KEY, USE_MOCK_EMOTIONS
 from ..analyzers.emotion_analyzer import EmotionAnalyzer
 from ..utils.video_utils import VideoProcessor
 from ..utils import db_utils
 
 logger = logging.getLogger(__name__)
+
+# Default to streaming mode (can be overridden by database setting)
+USE_STREAMING_API = True
 
 def publish_progress(redis_conn, job_id: str, progress: int, step: str,
                     reference_type: str = 'reaction_video', reference_id: int = None):
@@ -49,6 +55,17 @@ def publish_error(redis_conn, job_id: str, error: str, stack: str = '',
     redis_conn.publish(f'job:error:{job_id}', message)
     db_utils.fail_job(job_id, error, stack)
 
+def publish_frame_result(redis_conn, job_id: str, frame_result: Dict[str, Any],
+                        reference_type: str = 'reaction_video', reference_id: int = None):
+    """Publish individual frame result for real-time UI updates"""
+    message = json.dumps({
+        'type': 'frame_result',
+        'frame': frame_result,
+        'referenceType': reference_type,
+        'referenceId': reference_id,
+    })
+    redis_conn.publish(f'job:frame:{job_id}', message)
+
 def analyze_emotion(job_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Main entry point for emotion analysis.
@@ -80,13 +97,36 @@ def analyze_emotion(job_data: Dict[str, Any]) -> Dict[str, Any]:
         if not api_key:
             raise ValueError("Hume API key not configured")
 
-        # Initialize analyzer
-        analyzer = EmotionAnalyzer(api_key)
+        # Check mock mode - database setting takes precedence over environment variable
+        db_mock_setting = db_utils.get_setting('use_mock_emotions')
+        use_mock = USE_MOCK_EMOTIONS  # Default from environment
+        if db_mock_setting is not None:
+            use_mock = db_mock_setting.lower() == 'true'
 
-        # Process video
-        result = process_reaction_video(
-            file_path, reaction_id, job_id, redis_conn, analyzer
-        )
+        logger.info(f"Mock mode: {use_mock} (env: {USE_MOCK_EMOTIONS}, db: {db_mock_setting})")
+
+        # Check streaming mode - database setting takes precedence
+        db_streaming_setting = db_utils.get_setting('use_streaming_api')
+        use_streaming = USE_STREAMING_API  # Default from module constant
+        if db_streaming_setting is not None:
+            use_streaming = db_streaming_setting.lower() == 'true'
+
+        logger.info(f"Streaming mode: {use_streaming} (default: {USE_STREAMING_API}, db: {db_streaming_setting})")
+
+        # Process video using appropriate mode
+        if use_streaming and not use_mock:
+            # Use streaming API for real-time frame-by-frame analysis
+            logger.info("Using streaming API for emotion analysis")
+            result = asyncio.run(process_reaction_video_streaming(
+                file_path, reaction_id, job_id, redis_conn, api_key
+            ))
+        else:
+            # Use batch API (or mock mode)
+            logger.info("Using batch API for emotion analysis")
+            analyzer = EmotionAnalyzer(api_key, force_mock=use_mock)
+            result = process_reaction_video(
+                file_path, reaction_id, job_id, redis_conn, analyzer
+            )
 
         # Add processing time
         result['processing_time_seconds'] = round(time.time() - start_time, 2)
@@ -130,34 +170,128 @@ def process_reaction_video(
     video_info = processor.get_video_info(file_path)
     update_reaction_video_info(reaction_id, video_info)
 
-    # Extract frames
-    publish_progress(redis_conn, job_id, 15, 'Extracting frames...', 'reaction_video', reaction_id)
-    frames = processor.extract_frames(file_path, sample_rate=FRAME_SAMPLE_RATE)
-    logger.info(f"Extracted {len(frames)} frames")
-
-    # Analyze emotions with progress
+    # Progress callback for video analysis
     def emotion_progress(pct):
-        # Emotion analysis phase: 20-85%
-        progress = 20 + int(pct * 0.65)
+        # Emotion analysis phase: 15-85%
+        progress = 15 + int(pct * 0.7)
         publish_progress(redis_conn, job_id, progress,
                         f'Analyzing emotions ({pct}%)...', 'reaction_video', reaction_id)
 
-    publish_progress(redis_conn, job_id, 20, 'Analyzing emotions...', 'reaction_video', reaction_id)
-    frame_results = analyzer.analyze_frames_batch(
-        frames,
-        progress_callback=emotion_progress,
-        batch_size=5
-    )
+    publish_progress(redis_conn, job_id, 15, 'Uploading to Hume AI...', 'reaction_video', reaction_id)
 
-    # Calculate summary
-    publish_progress(redis_conn, job_id, 90, 'Calculating summary...', 'reaction_video', reaction_id)
-    summary = analyzer.calculate_summary(frame_results)
+    # Use the efficient video file analysis (uploads entire file to Hume)
+    result = analyzer.analyze_video_file(file_path, progress_callback=emotion_progress)
+
+    frame_results = result.get('frame_results', [])
+    summary = result.get('summary', {})
+
+    logger.info(f"Video analysis complete: {len(frame_results)} frames analyzed")
+
+    # Calculate summary if not already done
+    if not summary or summary.get('error'):
+        publish_progress(redis_conn, job_id, 90, 'Calculating summary...', 'reaction_video', reaction_id)
+        summary = analyzer.calculate_summary(frame_results)
 
     return {
         'frame_results': frame_results,
         'summary': summary,
         'video_info': video_info,
     }
+
+async def process_reaction_video_streaming(
+    file_path: str,
+    reaction_id: int,
+    job_id: str,
+    redis_conn,
+    api_key: str
+) -> Dict[str, Any]:
+    """Process a reaction video using streaming API for real-time analysis"""
+    from ..analyzers.streaming_emotion_analyzer import StreamingEmotionAnalyzer, calculate_streaming_summary
+
+    logger.info(f"Processing reaction video (streaming mode): {file_path}")
+
+    # Get video info first
+    processor = VideoProcessor()
+    publish_progress(redis_conn, job_id, 5, 'Loading video...', 'reaction_video', reaction_id)
+    video_info = processor.get_video_info(file_path)
+    update_reaction_video_info(reaction_id, video_info)
+
+    # Initialize streaming analyzer
+    analyzer = StreamingEmotionAnalyzer(api_key)
+    frame_results = []
+
+    try:
+        # Connect to Hume streaming API
+        publish_progress(redis_conn, job_id, 10, 'Connecting to Hume streaming API...', 'reaction_video', reaction_id)
+        await analyzer.connect()
+
+        # Open video file
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video: {file_path}")
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps if fps > 0 else 0
+
+        # Sample at 2 fps for emotion analysis
+        sample_rate = 2
+        frame_interval = max(1, int(fps / sample_rate))
+        total_samples = int(duration * sample_rate)
+
+        logger.info(f"Streaming analysis: duration={duration:.1f}s, fps={fps:.1f}, samples={total_samples}")
+
+        frame_num = 0
+        sample_idx = 0
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Sample at desired rate
+            if frame_num % frame_interval == 0:
+                timestamp = frame_num / fps
+
+                # Analyze frame via streaming API
+                result = await analyzer.analyze_frame(frame, frame_num, timestamp)
+
+                if result:
+                    frame_results.append(result)
+
+                    # Real-time progress update
+                    progress = 15 + int((sample_idx / max(1, total_samples)) * 70)
+                    publish_progress(
+                        redis_conn, job_id, progress,
+                        f'Analyzing frame {sample_idx + 1}/{total_samples}...',
+                        'reaction_video', reaction_id
+                    )
+
+                    # Emit frame result for real-time UI update
+                    publish_frame_result(redis_conn, job_id, result, 'reaction_video', reaction_id)
+
+                sample_idx += 1
+
+            frame_num += 1
+
+        cap.release()
+        logger.info(f"Streaming analysis complete: {len(frame_results)} frames analyzed")
+
+        # Calculate summary
+        publish_progress(redis_conn, job_id, 90, 'Calculating summary...', 'reaction_video', reaction_id)
+        summary = calculate_streaming_summary(frame_results)
+
+        return {
+            'frame_results': frame_results,
+            'summary': summary,
+            'video_info': video_info,
+        }
+
+    except Exception as e:
+        logger.error(f"Streaming analysis failed: {e}")
+        raise
+    finally:
+        await analyzer.close()
 
 def update_reaction_status(reaction_id: int, status: str, error_message: str = None):
     """Update reaction video status in database"""

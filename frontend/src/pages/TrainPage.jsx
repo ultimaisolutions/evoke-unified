@@ -12,10 +12,17 @@ export function TrainPage() {
   const [reaction, setReaction] = useState(null);
   const [emotionSummary, setEmotionSummary] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [liveFrameResults, setLiveFrameResults] = useState([]);
 
   const handleAnalysisComplete = (reactionData) => {
     setReaction(reactionData);
     setEmotionSummary(reactionData.emotion_summary);
+    // Clear live frame results once analysis is complete
+    setLiveFrameResults([]);
+  };
+
+  const handleFrameResultsUpdate = (frameResults) => {
+    setLiveFrameResults(frameResults);
   };
 
   const handleRatingSubmit = () => {
@@ -26,6 +33,7 @@ export function TrainPage() {
   const resetFlow = () => {
     setReaction(null);
     setEmotionSummary(null);
+    setLiveFrameResults([]);
   };
 
   return (
@@ -88,6 +96,7 @@ export function TrainPage() {
             <ReactionUpload
               selectedAd={selectedAd}
               onAnalysisComplete={handleAnalysisComplete}
+              onFrameResultsUpdate={handleFrameResultsUpdate}
             />
           </div>
 
@@ -106,6 +115,7 @@ export function TrainPage() {
             <EmotionTimeline
               reactionId={reaction?.id}
               emotionSummary={emotionSummary}
+              liveFrameResults={liveFrameResults}
             />
           </div>
         </div>

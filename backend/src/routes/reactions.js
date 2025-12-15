@@ -89,6 +89,48 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
+ * Format reaction data with nested emotion_summary
+ */
+function formatReactionWithEmotionSummary(row) {
+  const {
+    // Reaction video fields
+    id, ad_id, filename, original_filename, file_path,
+    duration_seconds, fps, frame_count, status, error_message,
+    created_at, updated_at,
+    // Emotion summary fields (from LEFT JOIN)
+    avg_joy, avg_surprise, avg_sadness, avg_anger, avg_fear,
+    avg_disgust, avg_contempt, avg_interest, avg_confusion,
+    peak_joy_timestamp, peak_surprise_timestamp, peak_interest_timestamp,
+    avg_engagement, peak_engagement, engagement_trend,
+    dominant_emotion, emotional_valence, emotional_arousal,
+    emotion_timeline, frames_analyzed, frames_with_faces,
+    emotion_processing_time
+  } = row;
+
+  // Build reaction object
+  const reaction = {
+    id, ad_id, filename, original_filename, file_path,
+    duration_seconds, fps, frame_count, status, error_message,
+    created_at, updated_at,
+  };
+
+  // Only include emotion_summary if we have data
+  if (avg_engagement !== null || dominant_emotion !== null) {
+    reaction.emotion_summary = {
+      avg_joy, avg_surprise, avg_sadness, avg_anger, avg_fear,
+      avg_disgust, avg_contempt, avg_interest, avg_confusion,
+      peak_joy_timestamp, peak_surprise_timestamp, peak_interest_timestamp,
+      avg_engagement, peak_engagement, engagement_trend,
+      dominant_emotion, emotional_valence, emotional_arousal,
+      emotion_timeline, frames_analyzed, frames_with_faces,
+      processing_time_seconds: emotion_processing_time
+    };
+  }
+
+  return reaction;
+}
+
+/**
  * GET /api/reactions/:id
  * Get a single reaction video with emotion data
  */
@@ -105,9 +147,11 @@ router.get('/:id', async (req, res, next) => {
       });
     }
 
+    const reaction = formatReactionWithEmotionSummary(result.rows[0]);
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: reaction,
     });
   } catch (error) {
     next(error);
